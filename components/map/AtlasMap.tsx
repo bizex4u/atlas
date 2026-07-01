@@ -9,6 +9,7 @@ export default function AtlasMap() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const markers = useRef<maplibregl.Marker[]>([]);
+  const isProgrammaticMove = useRef(false);
 
   const { mapCenter, mapZoom, setMapCenter, setMapZoom, openDrawer, setIsAnalyzing, setLastAnalysisPoint } = useAppStore();
   const { sites, setSelectedSite } = useSiteStore();
@@ -71,17 +72,15 @@ export default function AtlasMap() {
     map.current.on('click', handleMapClick);
 
     map.current.on('moveend', () => {
+      if (isProgrammaticMove.current) return;
       const center = map.current?.getCenter();
-      if (center) {
-        setMapCenter({ lat: center.lat, lng: center.lng });
-      }
+      if (center) setMapCenter({ lat: center.lat, lng: center.lng });
     });
 
     map.current.on('zoomend', () => {
+      if (isProgrammaticMove.current) return;
       const zoom = map.current?.getZoom();
-      if (zoom !== undefined) {
-        setMapZoom(zoom);
-      }
+      if (zoom !== undefined) setMapZoom(zoom);
     });
 
     return () => {
@@ -143,13 +142,15 @@ export default function AtlasMap() {
   }, [sites, setSelectedSite, openDrawer]);
 
   useEffect(() => {
-    if (map.current) {
-      map.current.flyTo({
-        center: [mapCenter.lng, mapCenter.lat],
-        zoom: mapZoom,
-        duration: 1500
-      });
-    }
+    if (!map.current) return;
+    const cur = map.current.getCenter();
+    const curZoom = map.current.getZoom();
+    const sameLoc = Math.abs(cur.lat - mapCenter.lat) < 0.0001 && Math.abs(cur.lng - mapCenter.lng) < 0.0001;
+    const sameZoom = Math.abs(curZoom - mapZoom) < 0.01;
+    if (sameLoc && sameZoom) return;
+    isProgrammaticMove.current = true;
+    map.current.flyTo({ center: [mapCenter.lng, mapCenter.lat], zoom: mapZoom, duration: 1500 });
+    map.current.once('moveend', () => { isProgrammaticMove.current = false; });
   }, [mapCenter, mapZoom]);
 
   return (
