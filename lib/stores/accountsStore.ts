@@ -1,186 +1,107 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Client, Invoice, InvoiceItem, Payment } from '@/types';
-import { generateId, generateInvoiceNumber, calculateGST } from '@/lib/utils';
+import type { Invoice, PaymentEntry } from '@/types/accounts';
+
+function uuid() { return crypto.randomUUID(); }
+function now()  { return new Date().toISOString(); }
+
+function nextInvoiceNumber(invoices: Invoice[], type: 'receivable' | 'payable'): string {
+  const prefix = type === 'receivable' ? 'INV' : 'BILL';
+  const year   = new Date().getFullYear();
+  const existing = invoices
+    .filter((i) => i.type === type && i.invoiceNumber.startsWith(`${prefix}-${year}`))
+    .map((i) => parseInt(i.invoiceNumber.split('-')[2] ?? '0', 10))
+    .filter((n) => !isNaN(n));
+  const next = existing.length > 0 ? Math.max(...existing) + 1 : 1;
+  return `${prefix}-${year}-${String(next).padStart(3, '0')}`;
+}
 
 interface AccountsStore {
-  clients: Client[];
   invoices: Invoice[];
-  payments: Payment[];
-  invoiceCounter: number;
-  selectedClientId: string | null;
-  selectedInvoiceId: string | null;
+  ourGstin: string;
+  ourState: string;   // for CGST/SGST vs IGST determination
 
-  addClient: (client: Omit<Client, 'id' | 'outstanding' | 'createdAt' | 'updatedAt'>) => Client;
-  updateClient: (id: string, updates: Partial<Client>) => void;
-  deleteClient: (id: string) => void;
-  setSelectedClient: (id: string | null) => void;
-  getClientOutstanding: (clientId: string) => number;
+  setOurDetails: (gstin: string, state: string) => void;
 
-  addInvoice: (invoice: {
-    clientId: string;
-    items: InvoiceItem[];
-    invoiceDate: string;
-    dueDate: string;
-    placeOfSupply: string;
-    notes?: string;
-  }) => Invoice;
-  updateInvoice: (id: string, updates: Partial<Invoice>) => void;
-  deleteInvoice: (id: string) => void;
-  setSelectedInvoice: (id: string | null) => void;
-  markInvoicePaid: (id: string) => void;
-  getInvoicesByClient: (clientId: string) => Invoice[];
-  getOverdueInvoices: () => Invoice[];
+  addInvoice:    (data: Omit<Invoice, 'id' | 'invoiceNumber' | 'createdAt' | 'updatedAt'>) => Invoice;
+  updateInvoice: (id: string, data: Partial<Invoice>) => void;
+  removeInvoice: (id: string) => void;
 
-  addPayment: (payment: Omit<Payment, 'id' | 'createdAt'>) => Payment;
-  getPaymentsByInvoice: (invoiceId: string) => Payment[];
+  addPayment: (invoiceId: string, payment: Omit<PaymentEntry, 'id'>) => void;
+
+  // Summaries
+  totalReceivable:  () => number;
+  totalPayable:     () => number;
+  overdueInvoices:  () => Invoice[];
 }
 
 export const useAccountsStore = create<AccountsStore>()(
   persist(
     (set, get) => ({
-      clients: [],
       invoices: [],
-      payments: [],
-      invoiceCounter: 0,
-      selectedClientId: null,
-      selectedInvoiceId: null,
+      ourGstin: '',
+      ourState: 'Uttar Pradesh',
 
-      addClient: (clientData) => {
-        const newClient: Client = {
-          ...clientData,
-          id: generateId(),
-          outstanding: 0,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+      setOurDetails: (gstin, state) => set({ ourGstin: gstin, ourState: state }),
+
+      addInvoice: (data) => {
+        const invoices = get().invoices;
+        const invoice: Invoice = {
+          ...data,
+          id:            uuid(),
+          invoiceNumber: nextInvoiceNumber(invoices, data.type),
+          ourGstin:      get().ourGstin,
+          createdAt:     now(),
+          updatedAt:     now(),
         };
-        set((state) => ({ clients: [...state.clients, newClient] }));
-        return newClient;
+        set((s) => ({ invoices: [invoice, ...s.invoices] }));
+        return invoice;
       },
 
-      updateClient: (id, updates) => {
-        set((state) => ({
-          clients: state.clients.map(c =>
-            c.id === id ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c
-          )
+      updateInvoice: (id, data) =>
+        set((s) => ({
+          invoices: s.invoices.map((inv) =>
+            inv.id === id ? { ...inv, ...data, updatedAt: now() } : inv,
+          ),
+        })),
+
+      removeInvoice: (id) =>
+        set((s) => ({ invoices: s.invoices.filter((i) => i.id !== id) })),
+
+      addPayment: (invoiceId, payment) => {
+        const entry: PaymentEntry = { ...payment, id: uuid() };
+        set((s) => ({
+          invoices: s.invoices.map((inv) => {
+            if (inv.id !== invoiceId) return inv;
+            const payments    = [...inv.payments, entry];
+            const paidAmount  = payments.reduce((sum, p) => sum + p.amountInr, 0);
+            const outstanding = Math.max(0, inv.totalInr - paidAmount);
+            const status =
+              outstanding === 0 ? 'paid' :
+              paidAmount  > 0   ? 'partial' :
+              new Date(inv.dueDate) < new Date() ? 'overdue' : 'sent';
+            return { ...inv, payments, paidAmountInr: paidAmount, outstandingInr: outstanding, status, updatedAt: now() };
+          }),
         }));
       },
 
-      deleteClient: (id) => {
-        set((state) => ({
-          clients: state.clients.filter(c => c.id !== id),
-          selectedClientId: state.selectedClientId === id ? null : state.selectedClientId
-        }));
-      },
+      totalReceivable: () =>
+        get().invoices
+          .filter((i) => i.type === 'receivable' && i.status !== 'paid')
+          .reduce((s, i) => s + i.outstandingInr, 0),
 
-      setSelectedClient: (id) => {
-        set({ selectedClientId: id });
-      },
+      totalPayable: () =>
+        get().invoices
+          .filter((i) => i.type === 'payable' && i.status !== 'paid')
+          .reduce((s, i) => s + i.outstandingInr, 0),
 
-      getClientOutstanding: (clientId) => {
-        const invoices = get().getInvoicesByClient(clientId);
-        return invoices
-          .filter(inv => inv.status !== 'paid' && inv.status !== 'cancelled')
-          .reduce((sum, inv) => sum + inv.grandTotal, 0);
-      },
-
-      addInvoice: (invoiceData) => {
-        const state = get();
-        const client = state.clients.find(c => c.id === invoiceData.clientId);
-        const sameState = client?.state === 'Uttar Pradesh';
-        const subtotal = invoiceData.items.reduce((sum, item) => sum + item.amount, 0);
-        const { cgst, sgst, igst } = calculateGST(subtotal, sameState);
-        const total = subtotal + cgst + sgst + igst;
-        const roundOff = Math.round(total) - total;
-        const grandTotal = Math.round(total);
-
-        const invoiceNumber = generateInvoiceNumber('INV', state.invoiceCounter);
-
-        const newInvoice: Invoice = {
-          id: generateId(),
-          invoiceNumber,
-          type: 'tax',
-          status: 'draft',
-          clientId: invoiceData.clientId,
-          invoiceDate: invoiceData.invoiceDate,
-          dueDate: invoiceData.dueDate,
-          sacCode: '998361',
-          placeOfSupply: invoiceData.placeOfSupply,
-          items: invoiceData.items,
-          subtotal,
-          cgst,
-          sgst,
-          igst,
-          total,
-          roundOff,
-          grandTotal,
-          notes: invoiceData.notes,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-
-        set((state) => ({
-          invoices: [...state.invoices, newInvoice],
-          invoiceCounter: state.invoiceCounter + 1
-        }));
-
-        return newInvoice;
-      },
-
-      updateInvoice: (id, updates) => {
-        set((state) => ({
-          invoices: state.invoices.map(inv =>
-            inv.id === id ? { ...inv, ...updates, updatedAt: new Date().toISOString() } : inv
-          )
-        }));
-      },
-
-      deleteInvoice: (id) => {
-        set((state) => ({
-          invoices: state.invoices.filter(inv => inv.id !== id),
-          selectedInvoiceId: state.selectedInvoiceId === id ? null : state.selectedInvoiceId
-        }));
-      },
-
-      setSelectedInvoice: (id) => {
-        set({ selectedInvoiceId: id });
-      },
-
-      markInvoicePaid: (id) => {
-        set((state) => ({
-          invoices: state.invoices.map(inv =>
-            inv.id === id ? { ...inv, status: 'paid' as const, updatedAt: new Date().toISOString() } : inv
-          )
-        }));
-      },
-
-      getInvoicesByClient: (clientId) => {
-        return get().invoices.filter(inv => inv.clientId === clientId);
-      },
-
-      getOverdueInvoices: () => {
-        const today = new Date().toISOString().split('T')[0];
-        return get().invoices.filter(inv =>
-          inv.status === 'sent' && inv.dueDate < today
+      overdueInvoices: () => {
+        const today = new Date();
+        return get().invoices.filter(
+          (i) => i.status !== 'paid' && i.status !== 'draft' && new Date(i.dueDate) < today,
         );
       },
-
-      addPayment: (paymentData) => {
-        const newPayment: Payment = {
-          ...paymentData,
-          id: generateId(),
-          createdAt: new Date().toISOString()
-        };
-        set((state) => ({ payments: [...state.payments, newPayment] }));
-        return newPayment;
-      },
-
-      getPaymentsByInvoice: (invoiceId) => {
-        return get().payments.filter(p => p.invoiceId === invoiceId);
-      }
     }),
-    {
-      name: 'atlas-accounts'
-    }
-  )
+    { name: 'atlas-accounts' },
+  ),
 );
