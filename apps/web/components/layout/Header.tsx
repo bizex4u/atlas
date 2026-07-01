@@ -1,21 +1,23 @@
-import { Search } from "lucide-react";
+import { LocationSearch } from './LocationSearch';
 
 export function Header() {
   return (
-    <header className="flex h-12 shrink-0 items-center gap-4 border-b border-zinc-800 bg-zinc-900 px-4">
-      <span className="text-sm font-semibold tracking-widest text-white uppercase">
-        Atlas
-      </span>
-      <div className="flex flex-1 max-w-sm items-center gap-2 rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5">
-        <Search className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
-        <input
-          type="text"
-          placeholder="Search locations…"
-          className="w-full bg-transparent text-sm text-white placeholder-zinc-500 outline-none"
-        />
+    <header className="flex h-14 shrink-0 items-center gap-4 border-b border-gray-100 bg-white px-5 shadow-sm z-10">
+      <div className="flex items-center gap-2 shrink-0">
+        <div className="h-7 w-7 rounded-lg bg-[#6B21A8] flex items-center justify-center">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+          </svg>
+        </div>
+        <span className="text-[15px] font-bold tracking-tight text-gray-900">Atlas</span>
       </div>
-      <div className="ml-auto flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-medium text-white select-none">
-        YM
+
+      <LocationSearch />
+
+      <div className="ml-auto">
+        <div className="h-8 w-8 rounded-full bg-[#6B21A8] flex items-center justify-center text-[11px] font-bold text-white select-none shadow-sm">
+          YM
+        </div>
       </div>
     </header>
   );
