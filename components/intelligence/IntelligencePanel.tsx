@@ -1,0 +1,297 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { MapPin, Users, Car, Building2, TrendingUp, Target, RefreshCw, Loader2 } from 'lucide-react';
+import { useAppStore } from '@/lib/stores';
+import { intelligenceEngine } from '@/lib/intelligence/engine';
+import { formatNumber } from '@/lib/utils';
+import type { LocationAnalysis, SiteFormat } from '@/types';
+
+export default function IntelligencePanel() {
+  const { drawerData, isAnalyzing, setIsAnalyzing, lastAnalysisPoint } = useAppStore();
+  const [analysis, setAnalysis] = useState<LocationAnalysis | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [radius, setRadius] = useState(2);
+
+  const lat = (drawerData?.lat as number) || lastAnalysisPoint?.lat || 26.8467;
+  const lng = (drawerData?.lng as number) || lastAnalysisPoint?.lng || 80.9462;
+
+  useEffect(() => {
+    if (lat && lng) {
+      runAnalysis();
+    }
+  }, [lat, lng]);
+
+  const runAnalysis = async () => {
+    setLoading(true);
+    setError(null);
+    setIsAnalyzing(true);
+
+    try {
+      const result = await intelligenceEngine.analyzeLocation(lat, lng, radius);
+      setAnalysis(result);
+    } catch (err) {
+      setError('Failed to analyze location. Please try again.');
+      console.error(err);
+    } finally {
+      setLoading(false);
+      setIsAnalyzing(false);
+    }
+  };
+
+  const getScoreColor = (score: number) => {
+    if (score >= 75) return 'text-success';
+    if (score >= 50) return 'text-warning';
+    return 'text-error';
+  };
+
+  const getScoreBg = (score: number) => {
+    if (score >= 75) return 'bg-success';
+    if (score >= 50) return 'bg-warning';
+    return 'bg-error';
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="card bg-dark-100/50">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2 text-sm text-gray-400">
+            <MapPin size={14} />
+            <span>{lat.toFixed(4)}, {lng.toFixed(4)}</span>
+          </div>
+          <button
+            onClick={runAnalysis}
+            disabled={loading}
+            className="btn btn-ghost px-2 py-1"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <select
+            value={radius}
+            onChange={(e) => setRadius(parseInt(e.target.value))}
+            className="select text-sm flex-1"
+            disabled={loading}
+          >
+            <option value="1">1 km radius</option>
+            <option value="2">2 km radius</option>
+            <option value="3">3 km radius</option>
+            <option value="5">5 km radius</option>
+          </select>
+        </div>
+      </div>
+
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-12">
+          <Loader2 size={32} className="animate-spin text-primary-500 mb-3" />
+          <div className="text-sm text-gray-400">Analyzing location...</div>
+          <div className="text-xs text-gray-500 mt-1">Fetching demographics, POIs & traffic data</div>
+        </div>
+      )}
+
+      {error && (
+        <div className="card bg-error/10 border-error/30 text-center">
+          <div className="text-error">{error}</div>
+          <button onClick={runAnalysis} className="btn btn-secondary mt-3">
+            Try Again
+          </button>
+        </div>
+      )}
+
+      {analysis && !loading && (
+        <>
+          <div className="card bg-gradient-to-br from-primary-800/30 to-dark-100/50">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="text-xs text-gray-400 uppercase tracking-wider">Overall Score</div>
+                <div className={`text-3xl font-bold ${getScoreColor(analysis.scores.overall)}`}>
+                  {analysis.scores.overall}/100
+                </div>
+              </div>
+              <div className="w-16 h-16 rounded-full border-4 border-dark-100 flex items-center justify-center">
+                <div className={`text-2xl font-bold ${getScoreColor(analysis.scores.overall)}`}>
+                  {analysis.scores.overall >= 75 ? 'A' : analysis.scores.overall >= 50 ? 'B' : 'C'}
+                </div>
+              </div>
+            </div>
+            <div className="text-sm text-gray-300">{analysis.recommendation}</div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="card">
+              <div className="flex items-center gap-2 mb-2">
+                <Target size={14} className="text-primary-400" />
+                <span className="text-xs text-gray-400">Visibility</span>
+              </div>
+              <div className="text-lg font-semibold text-white">{analysis.scores.visibility}</div>
+              <div className="progress-bar mt-2">
+                <div
+                  className={`progress-fill ${getScoreBg(analysis.scores.visibility)}`}
+                  style={{ width: `${analysis.scores.visibility}%` }}
+                />
+              </div>
+            </div>
+            <div className="card">
+              <div className="flex items-center gap-2 mb-2">
+                <Car size={14} className="text-primary-400" />
+                <span className="text-xs text-gray-400">Traffic</span>
+              </div>
+              <div className="text-lg font-semibold text-white">{analysis.scores.traffic}</div>
+              <div className="progress-bar mt-2">
+                <div
+                  className={`progress-fill ${getScoreBg(analysis.scores.traffic)}`}
+                  style={{ width: `${analysis.scores.traffic}%` }}
+                />
+              </div>
+            </div>
+            <div className="card">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp size={14} className="text-primary-400" />
+                <span className="text-xs text-gray-400">Affluence</span>
+              </div>
+              <div className="text-lg font-semibold text-white">{analysis.scores.affluence}</div>
+              <div className="progress-bar mt-2">
+                <div
+                  className={`progress-fill ${getScoreBg(analysis.scores.affluence)}`}
+                  style={{ width: `${analysis.scores.affluence}%` }}
+                />
+              </div>
+            </div>
+            <div className="card">
+              <div className="flex items-center gap-2 mb-2">
+                <Building2 size={14} className="text-primary-400" />
+                <span className="text-xs text-gray-400">Competition</span>
+              </div>
+              <div className="text-lg font-semibold text-white">{analysis.scores.competition}</div>
+              <div className="progress-bar mt-2">
+                <div
+                  className={`progress-fill ${getScoreBg(analysis.scores.competition)}`}
+                  style={{ width: `${analysis.scores.competition}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <h3 className="text-sm font-medium text-gray-300 mb-3">Demographics</h3>
+            <div className="grid grid-cols-2 gap-y-3 text-sm">
+              <div>
+                <div className="text-gray-500">Population</div>
+                <div className="text-white font-medium">{formatNumber(analysis.demographics.population)}</div>
+              </div>
+              <div>
+                <div className="text-gray-500">Households</div>
+                <div className="text-white font-medium">{formatNumber(analysis.demographics.households)}</div>
+              </div>
+              <div>
+                <div className="text-gray-500">Working Pop.</div>
+                <div className="text-white font-medium">{formatNumber(analysis.demographics.workingPopulation)}</div>
+              </div>
+              <div>
+                <div className="text-gray-500">Income Level</div>
+                <div className="text-white font-medium capitalize">{analysis.demographics.incomeLevel}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <h3 className="text-sm font-medium text-gray-300 mb-3">Catchment Area</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Residential</span>
+                <span className="text-white">{formatNumber(analysis.catchment.residentialPopulation)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Floating</span>
+                <span className="text-white">{formatNumber(analysis.catchment.floatingPopulation)}</span>
+              </div>
+              <div className="h-px bg-dark-100" />
+              <div className="text-sm">
+                <div className="text-gray-500">Primary Audience</div>
+                <div className="text-white">{analysis.catchment.primaryAudience}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <h3 className="text-sm font-medium text-gray-300 mb-3">Traffic Data</h3>
+            <div className="grid grid-cols-2 gap-y-3 text-sm">
+              <div>
+                <div className="text-gray-500">Daily Vehicles</div>
+                <div className="text-white font-medium">{formatNumber(analysis.traffic.avgDailyVehicles)}</div>
+              </div>
+              <div>
+                <div className="text-gray-500">Road Type</div>
+                <div className="text-white font-medium">{analysis.traffic.roadType}</div>
+              </div>
+              <div className="col-span-2">
+                <div className="text-gray-500 mb-2">Vehicle Split</div>
+                <div className="flex gap-1">
+                  <div className="flex-1 text-center">
+                    <div className="progress-bar h-3 mb-1">
+                      <div className="progress-fill bg-blue-500" style={{ width: `${analysis.traffic.vehicleSplit.two_wheeler}%` }} />
+                    </div>
+                    <div className="text-xs text-gray-500">{analysis.traffic.vehicleSplit.two_wheeler}%</div>
+                  </div>
+                  <div className="flex-1 text-center">
+                    <div className="progress-bar h-3 mb-1">
+                      <div className="progress-fill bg-green-500" style={{ width: `${analysis.traffic.vehicleSplit.car}%` }} />
+                    </div>
+                    <div className="text-xs text-gray-500">{analysis.traffic.vehicleSplit.car}%</div>
+                  </div>
+                  <div className="flex-1 text-center">
+                    <div className="progress-bar h-3 mb-1">
+                      <div className="progress-fill bg-yellow-500" style={{ width: `${analysis.traffic.vehicleSplit.commercial}%` }} />
+                    </div>
+                    <div className="text-xs text-gray-500">{analysis.traffic.vehicleSplit.commercial}%</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {analysis.competitors.length > 0 && (
+            <div className="card">
+              <h3 className="text-sm font-medium text-gray-300 mb-3">Nearby Competitors</h3>
+              <div className="space-y-2">
+                {analysis.competitors.map((comp, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm">
+                    <div>
+                      <div className="text-white">{comp.name}</div>
+                      <div className="text-gray-500 text-xs">{comp.format}</div>
+                    </div>
+                    <div className="text-gray-400">{comp.distance.toFixed(1)} km</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="card">
+            <h3 className="text-sm font-medium text-gray-300 mb-3">Estimated Revenue Potential</h3>
+            <div className="grid grid-cols-2 gap-3">
+              {(['HRD', 'UNI', 'GAN', 'SHL'] as SiteFormat[]).map(format => {
+                const revenue = intelligenceEngine.estimateSiteRevenue(analysis.scores, format);
+                return (
+                  <div key={format} className="bg-dark-100/50 rounded-lg p-2 text-center">
+                    <div className="text-xs text-gray-500">{format}</div>
+                    <div className="text-sm font-medium text-white">₹{formatNumber(revenue)}/mo</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-3 pt-3 border-t border-dark-100">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Est. Occupancy Rate</span>
+                <span className="text-white font-medium">{intelligenceEngine.estimateOccupancy(analysis.scores)}%</span>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

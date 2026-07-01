@@ -1,0 +1,248 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary-50: #faf5ff;
+  --color-primary-100: #f3e8ff;
+  --color-primary-200: #e9d5ff;
+  --color-primary-300: #d8b4fe;
+  --color-primary-400: #c084fc;
+  --color-primary-500: #a855f7;
+  --color-primary-600: #9333ea;
+  --color-primary-700: #7e22ce;
+  --color-primary-800: #6b21a8;
+  --color-primary-900: #581c87;
+  --color-primary-950: #3b0764;
+
+  --color-dark-50: #1a1a2e;
+  --color-dark-100: #16213e;
+  --color-dark-200: #1a0d2e;
+  --color-dark-300: #0f0a1a;
+  --color-dark-400: #0d0815;
+  --color-dark-500: #0a0610;
+  --color-dark-600: #07040c;
+  --color-dark-700: #040209;
+  --color-dark-800: #020105;
+  --color-dark-900: #000000;
+
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+}
+
+@layer base {
+  * {
+    @apply border-dark-100;
+  }
+
+  body {
+    @apply bg-dark-300 text-white antialiased;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-dark-400;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-primary-700 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-primary-600;
+  }
+}
+
+@layer components {
+  .map-container {
+    @apply w-full h-full;
+  }
+
+  .drawer {
+    @apply fixed top-0 left-[72px] h-full w-[420px] bg-dark-200/95 backdrop-blur-xl border-r border-dark-100 shadow-2xl z-40 transition-transform duration-300 ease-out overflow-hidden;
+  }
+
+  .drawer-header {
+    @apply flex items-center justify-between p-4 border-b border-dark-100;
+  }
+
+  .drawer-title {
+    @apply text-lg font-semibold text-white;
+  }
+
+  .drawer-content {
+    @apply h-[calc(100%-65px)] overflow-y-auto p-4;
+  }
+
+  .sidebar {
+    @apply fixed left-0 top-0 h-full w-[72px] bg-dark-400/90 backdrop-blur-xl border-r border-dark-100 z-50 flex flex-col items-center py-4 gap-1;
+  }
+
+  .sidebar-icon {
+    @apply w-12 h-12 flex items-center justify-center rounded-xl transition-all duration-200 cursor-pointer;
+  }
+
+  .sidebar-icon:hover {
+    @apply bg-primary-800/50;
+  }
+
+  .sidebar-icon.active {
+    @apply bg-primary-700 text-white;
+  }
+
+  .sidebar-badge {
+    @apply absolute top-1 right-1 w-4 h-4 rounded-full bg-error text-[10px] font-bold flex items-center justify-center;
+  }
+
+  .stat-card {
+    @apply bg-dark-100/50 rounded-xl p-4 border border-dark-100 hover:border-primary-800/50 transition-colors;
+  }
+
+  .stat-label {
+    @apply text-xs text-gray-400 uppercase tracking-wider;
+  }
+
+  .stat-value {
+    @apply text-2xl font-bold text-white mt-1;
+  }
+
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2;
+  }
+
+  .btn-primary {
+    @apply bg-primary-700 hover:bg-primary-600 text-white;
+  }
+
+  .btn-secondary {
+    @apply bg-dark-100 hover:bg-dark-50 text-white border border-dark-100;
+  }
+
+  .btn-ghost {
+    @apply hover:bg-dark-100 text-gray-300 hover:text-white;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 rounded-lg bg-dark-100 border border-dark-100 focus:border-primary-600 focus:outline-none focus:ring-1 focus:ring-primary-600 text-white placeholder-gray-500 transition-colors;
+  }
+
+  .select {
+    @apply w-full px-3 py-2 rounded-lg bg-dark-100 border border-dark-100 focus:border-primary-600 focus:outline-none focus:ring-1 focus:ring-primary-600 text-white appearance-none cursor-pointer transition-colors;
+  }
+
+  .label {
+    @apply block text-sm font-medium text-gray-300 mb-1;
+  }
+
+  .form-group {
+    @apply mb-4;
+  }
+
+  .card {
+    @apply bg-dark-100/30 rounded-xl border border-dark-100 p-4;
+  }
+
+  .tag {
+    @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium;
+  }
+
+  .tag-success {
+    @apply bg-success/20 text-success;
+  }
+
+  .tag-warning {
+    @apply bg-warning/20 text-warning;
+  }
+
+  .tag-error {
+    @apply bg-error/20 text-error;
+  }
+
+  .tag-info {
+    @apply bg-info/20 text-info;
+  }
+
+  .progress-bar {
+    @apply h-2 rounded-full bg-dark-100 overflow-hidden;
+  }
+
+  .progress-fill {
+    @apply h-full rounded-full transition-all duration-300;
+  }
+
+  .table-container {
+    @apply overflow-x-auto rounded-xl border border-dark-100;
+  }
+
+  .table {
+    @apply w-full text-sm;
+  }
+
+  .table th {
+    @apply px-4 py-3 text-left text-gray-400 font-medium bg-dark-100/50 border-b border-dark-100;
+  }
+
+  .table td {
+    @apply px-4 py-3 border-b border-dark-100/50;
+  }
+
+  .table tr:hover td {
+    @apply bg-dark-100/30;
+  }
+
+  .status-dot {
+    @apply w-2 h-2 rounded-full;
+  }
+
+  .status-available {
+    @apply bg-success;
+  }
+
+  .status-occupied {
+    @apply bg-error;
+  }
+
+  .status-booked {
+    @apply bg-warning;
+  }
+
+  .status-maintenance {
+    @apply bg-gray-500;
+  }
+}
+
+.maplibregl-ctrl-attrib {
+  background-color: rgba(13, 8, 21, 0.8) !important;
+}
+
+.maplibregl-ctrl-group {
+  background-color: rgba(13, 8, 21, 0.9) !important;
+  border-radius: 8px !important;
+}
+
+.maplibregl-ctrl-group button {
+  border-color: #16213e !important;
+  color: white !important;
+}
+
+.maplibregl-ctrl-group button:hover {
+  background-color: #16213e !important;
+}
+
+.maplibregl-ctrl-group button {
+  width: 36px !important;
+  height: 36px !important;
+}
+
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.maplibregl-ctrl-attrib a {
+  color: #a855f7 !important;
+}
