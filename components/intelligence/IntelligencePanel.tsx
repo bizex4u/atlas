@@ -3,13 +3,20 @@
 import { useState, useEffect } from 'react';
 import { MapPin, Users, Car, Building2, TrendingUp, Target, RefreshCw, Loader2 } from 'lucide-react';
 import { useAppStore } from '@/lib/stores';
+import { useInventoryStore } from '@/lib/stores/inventoryStore';
+import { useBarterStore } from '@/lib/stores/barterStore';
 import { intelligenceEngine } from '@/lib/intelligence/engine';
+import { runResearch } from '@/lib/research/orchestrator';
 import { formatNumber } from '@/lib/utils';
 import type { LocationAnalysis, SiteFormat } from '@/types';
+import type { ResearchBrief } from '@/lib/research/types';
 
 export default function IntelligencePanel() {
   const { drawerData, isAnalyzing, setIsAnalyzing, lastAnalysisPoint } = useAppStore();
+  const sites = useInventoryStore((s) => s.sites);
+  const deals = useBarterStore((s) => s.deals);
   const [analysis, setAnalysis] = useState<LocationAnalysis | null>(null);
+  const [brief, setBrief] = useState<ResearchBrief | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [radius, setRadius] = useState(2);
@@ -31,6 +38,34 @@ export default function IntelligencePanel() {
     try {
       const result = await intelligenceEngine.analyzeLocation(lat, lng, radius);
       setAnalysis(result);
+
+      const activeDeals = deals.filter((d) => d.status === 'active');
+      const research = await runResearch({
+        query: {
+          lat,
+          lng,
+          radiusKm: radius,
+          city: result.city,
+        },
+        sites: sites.map((s) => ({
+          id: s.id,
+          siteCode: s.siteCode,
+          name: s.name,
+          city: s.city,
+          state: s.state,
+          format: s.format,
+          status: s.status,
+          monthlyRentInr: s.monthlyRentInr,
+          lat: s.lat,
+          lng: s.lng,
+        })),
+        barter: {
+          activeDealCount: activeDeals.length,
+          partnerNames: [...new Set(activeDeals.map((d) => d.partnerName))],
+          openBalanceInr: activeDeals.reduce((sum, d) => sum + d.balanceInr, 0),
+        },
+      });
+      setBrief(research);
     } catch (err) {
       setError('Failed to analyze location. Please try again.');
       console.error(err);
@@ -118,6 +153,47 @@ export default function IntelligencePanel() {
               </div>
             </div>
             <div className="text-sm text-gray-300">{analysis.recommendation}</div>
+            {brief && (
+              <div className="mt-3 pt-3 border-t border-dark-100 space-y-2">
+                <div className="flex flex-wrap gap-3 text-xs text-gray-400">
+                  <span>
+                    Confidence{' '}
+                    <span className="text-white font-medium">
+                      {Math.round(brief.overallConfidence * 100)}%
+                    </span>
+                  </span>
+                  <span>
+                    Freshness{' '}
+                    <span className="text-white font-medium">
+                      {brief.recommendations[0]?.freshness ?? 'unknown'}
+                    </span>
+                  </span>
+                  <span>
+                    Sources{' '}
+                    <span className="text-white font-medium">{brief.evidence.length}</span>
+                  </span>
+                </div>
+                <div className="text-xs text-gray-400">{brief.summary}</div>
+                {brief.recommendations[0]?.siteCode && (
+                  <div className="text-xs text-primary-300">
+                    Top pick: {brief.recommendations[0].title} — {brief.recommendations[0].rationale}
+                  </div>
+                )}
+                {brief.missingData.length > 0 && (
+                  <div className="text-xs text-amber-400/90">
+                    Missing: {brief.missingData.slice(0, 3).map((m) => m.field).join(', ')}
+                    {brief.missingData.length > 3 ? ` (+${brief.missingData.length - 3})` : ''}
+                  </div>
+                )}
+                <ul className="text-xs text-gray-500 space-y-1">
+                  {brief.evidence.slice(0, 4).map((e) => (
+                    <li key={e.source.id}>
+                      {e.source.label}: {e.source.summary}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
